@@ -3,7 +3,7 @@
 A modern, responsive landing page designed to showcase mountaineering photography with a fluid, professional design inspired by high-end portfolio sites.
 
 > **Note:** This repository also includes 44 comprehensive flaky tests for testing automated flaky test detection agents.
-> tesst
+> test
 
 ## Features
 
