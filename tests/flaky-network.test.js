@@ -237,18 +237,22 @@ describe('Flaky Network-Dependent Tests', () => {
     }, 75);
   });
 
-  // FLAKY TEST 24: File upload with progress
+  // FIXED TEST 24: File upload with progress (now deterministic)
   test('should track upload progress correctly (FLAKY: progress timing)', (done) => {
+    jest.useFakeTimers();
+    
     let uploadProgress = 0;
     let uploadComplete = false;
     
-    // Mock file upload with progress updates
+    // Mock file upload with deterministic progress updates
     const mockFileUpload = (file) => {
       const totalSize = 1000;
       let uploaded = 0;
+      let chunkCount = 0;
       
       const uploadChunk = () => {
-        const chunkSize = Math.random() * 100 + 50; // Random chunk size
+        // Use deterministic chunk sizes instead of random
+        const chunkSize = chunkCount < 5 ? 150 : 250; // 5 chunks of 150, then 250
         uploaded = Math.min(uploaded + chunkSize, totalSize);
         uploadProgress = Math.floor((uploaded / totalSize) * 100);
         
@@ -257,8 +261,9 @@ describe('Flaky Network-Dependent Tests', () => {
           return;
         }
         
-        // Random delay between chunks
-        setTimeout(uploadChunk, Math.random() * 50 + 10);
+        chunkCount++;
+        // Use deterministic delay instead of random
+        setTimeout(uploadChunk, 30);
       };
       
       uploadChunk();
@@ -266,19 +271,23 @@ describe('Flaky Network-Dependent Tests', () => {
 
     mockFileUpload({ name: 'test.jpg', size: 1000 });
     
-    // Check progress at fixed intervals
+    // Check progress at deterministic intervals with fake timers
     setTimeout(() => {
-      expect(uploadProgress).toBeGreaterThan(30); // FLAKY: might be less than 30%
-    }, 100);
+      expect(uploadProgress).toBeGreaterThanOrEqual(45); // After ~3 chunks (450/1000 = 45%)
+    }, 90);
     
     setTimeout(() => {
-      expect(uploadProgress).toBeGreaterThan(70); // FLAKY: might be less than 70%
-    }, 200);
+      expect(uploadProgress).toBeGreaterThanOrEqual(75); // After ~5 chunks (750/1000 = 75%)
+    }, 150);
     
     setTimeout(() => {
-      expect(uploadComplete).toBe(true); // FLAKY: upload might not be complete
+      expect(uploadComplete).toBe(true);
       expect(uploadProgress).toBe(100);
+      jest.useRealTimers();
       done();
-    }, 300);
+    }, 210);
+    
+    // Advance timers to trigger all scheduled callbacks
+    jest.runAllTimers();
   });
 });
