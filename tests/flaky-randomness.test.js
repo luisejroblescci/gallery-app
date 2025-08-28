@@ -192,8 +192,20 @@ describe('Flaky Randomness-Based Tests', () => {
     }, 200); // Fixed 200ms check
   });
 
-  // FLAKY TEST 18: Weighted random selection
+  // FLAKY TEST 18: Weighted random selection - FIXED
   test('should respect weighted probabilities (FLAKY: weighted randomness)', () => {
+    // Mock Math.random to provide deterministic sequence
+    const mockRandomSequence = [0.02, 0.15, 0.8, 0.3, 0.1, 0.01, 0.6, 0.25, 0.9, 0.04,
+                               0.35, 0.7, 0.03, 0.5, 0.85, 0.12, 0.4, 0.95, 0.08, 0.65];
+    let randomCallCount = 0;
+    
+    const originalRandom = Math.random;
+    Math.random = jest.fn(() => {
+      const value = mockRandomSequence[randomCallCount % mockRandomSequence.length];
+      randomCallCount++;
+      return value;
+    });
+
     const weights = { common: 0.7, rare: 0.25, legendary: 0.05 };
     const results = { common: 0, rare: 0, legendary: 0 };
     const iterations = 20;
@@ -212,10 +224,18 @@ describe('Flaky Randomness-Based Tests', () => {
       results[result]++;
     }
 
-    // These assertions assume specific distribution
-    expect(results.common).toBeGreaterThan(10); // FLAKY: might get unlucky
-    expect(results.rare).toBeGreaterThan(3); // FLAKY: might get no rare items
-    expect(results.legendary).toBe(1); // FLAKY: might get 0 or multiple legendary
-    expect(results.legendary).toBeGreaterThan(0); // FLAKY: might get no legendary items
+    // Restore original Math.random
+    Math.random = originalRandom;
+
+    // Analysis: legendary < 0.05, rare < 0.3 (0.05 + 0.25), common >= 0.3
+    // Sequence: [0.02, 0.15, 0.8, 0.3, 0.1, 0.01, 0.6, 0.25, 0.9, 0.04,
+    //           0.35, 0.7, 0.03, 0.5, 0.85, 0.12, 0.4, 0.95, 0.08, 0.65]
+    // legendary (< 0.05): 0.02, 0.01, 0.04, 0.03 = 4
+    // rare (>= 0.05, < 0.3): 0.15, 0.1, 0.25, 0.12, 0.08 = 5  
+    // common (>= 0.3): 0.8, 0.3, 0.6, 0.9, 0.35, 0.7, 0.5, 0.85, 0.4, 0.95, 0.65 = 11
+    expect(results.legendary).toBe(4);
+    expect(results.rare).toBe(5); 
+    expect(results.common).toBe(11);
+    expect(results.common + results.rare + results.legendary).toBe(iterations);
   });
 });
