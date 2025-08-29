@@ -167,29 +167,28 @@ describe('Flaky Randomness-Based Tests', () => {
     expect(new Set(selections).size).toBeGreaterThan(3); // FLAKY: might get repeated selections
   });
 
-  // FLAKY TEST 17: Random delay simulation
-  test('should handle random delays (FLAKY: delay timing)', (done) => {
+  // FIXED TEST 17: Deterministic delay simulation
+  test('should handle random delays (FLAKY: delay timing)', async () => {
     let operationCompleted = false;
     const startTime = Date.now();
     
-    // Mock operation with random delay
-    const mockRandomDelayOperation = () => {
-      const delay = Math.random() * 200 + 100; // 100-300ms
-      setTimeout(() => {
-        operationCompleted = true;
-      }, delay);
+    // Mock operation with deterministic delay using Promise
+    const mockDeterministicDelayOperation = (delay = 150) => {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          operationCompleted = true;
+          resolve();
+        }, delay);
+      });
     };
 
-    mockRandomDelayOperation();
+    await mockDeterministicDelayOperation(150); // Use fixed 150ms delay
     
-    // Check completion at fixed time
-    setTimeout(() => {
-      const elapsedTime = Date.now() - startTime;
-      
-      expect(operationCompleted).toBe(true); // FLAKY: might not be completed yet
-      expect(elapsedTime).toBeLessThan(250); // FLAKY: delay might be longer
-      done();
-    }, 200); // Fixed 200ms check
+    const elapsedTime = Date.now() - startTime;
+    
+    expect(operationCompleted).toBe(true); // Now deterministic - operation always completes
+    expect(elapsedTime).toBeGreaterThanOrEqual(140); // Allow some timing variance
+    expect(elapsedTime).toBeLessThan(200); // Reasonable upper bound
   });
 
   // FLAKY TEST 18: Weighted random selection
