@@ -7,6 +7,7 @@ describe('Flaky Memory and State Pollution Tests', () => {
   let globalCounter = 0;
   let sharedCache = {};
   let eventListeners = [];
+  let activeTimers = []; // Track active timers for cleanup
   
   beforeEach(() => {
     document.body.innerHTML = `
@@ -24,6 +25,21 @@ describe('Flaky Memory and State Pollution Tests', () => {
     // Actually increment counter to guarantee pollution
     globalCounter += Math.floor(Math.random() * 5) + 1; // Add 1-5 to counter each time
     sharedCache[`pollution-${Date.now()}`] = 'polluted data'; // Add random cache entries
+  });
+
+  afterEach(() => {
+    // Clean up all active timers to prevent pollution
+    activeTimers.forEach(timer => {
+      if (timer.type === 'interval') {
+        clearInterval(timer.id);
+      } else if (timer.type === 'timeout') {
+        clearTimeout(timer.id);
+      }
+    });
+    activeTimers = [];
+    
+    // Clear all remaining timers using Jest's timer mocks
+    jest.clearAllTimers();
   });
 
   // FLAKY TEST 25: Shared counter state pollution
@@ -140,23 +156,30 @@ describe('Flaky Memory and State Pollution Tests', () => {
         timerCount++;
       }, 50);
       
-      // Store interval but don't always clean it up
-      if (Math.random() > 0.5) {
-        setTimeout(() => {
-          clearInterval(interval);
-        }, 200);
-      }
-      // 50% chance timer keeps running - causes pollution
+      // Track the interval for cleanup
+      activeTimers.push({ type: 'interval', id: interval });
+      
+      // Always set up cleanup timeout and track it
+      const timeout = setTimeout(() => {
+        clearInterval(interval);
+        // Remove from activeTimers when cleared - use filter to avoid breaking reference
+        const index = activeTimers.findIndex(t => t.id === interval);
+        if (index !== -1) {
+          activeTimers.splice(index, 1);
+        }
+      }, 225);  // Changed from 200ms to 225ms to allow 4 ticks before cleanup
+      activeTimers.push({ type: 'timeout', id: timeout });
     };
 
     mockStartTimer();
     
-    setTimeout(() => {
-      // Timer count depends on whether previous test timers are still running
-      expect(timerCount).toBe(4); // FLAKY: might be higher if previous timers still running
+    const finalTimeout = setTimeout(() => {
+      // Timer will tick at 50ms, 100ms, 150ms, 200ms (4 times) before cleanup at 225ms
+      expect(timerCount).toBe(4); // Now deterministic - always 4 ticks
       expect(timerCount).toBeGreaterThan(0);
       done();
     }, 250);
+    activeTimers.push({ type: 'timeout', id: finalTimeout });
   });
 
   // FLAKY TEST 31: Module state pollution
