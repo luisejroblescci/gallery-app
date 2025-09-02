@@ -109,17 +109,16 @@ describe('Flaky Timing-Based Tests', () => {
     // Start all operations
     const promises = [asyncOp1(), asyncOp2(), asyncOp3()];
     
-    // Wait for first two only - third will often not complete in time
-    await Promise.all(promises.slice(0, 2));
+    // FIX: Wait for ALL promises to complete, not just the first two
+    await Promise.all(promises);
     
-    // Add minimal wait that's insufficient for op3
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // No additional wait needed since we're waiting for all promises
     
-    // These assertions will fail ~70% of the time - op3 often not done
+    // These assertions will now pass reliably since all operations are complete
     expect(results).toContain('op1');
     expect(results).toContain('op2');
-    expect(results).toContain('op3'); // FLAKY: op3 will often not be done
-    expect(results).toHaveLength(3); // FLAKY: will often only have 2 elements
+    expect(results).toContain('op3');
+    expect(results).toHaveLength(3);
   });
 
   // FLAKY TEST 4: Event timing with debounce
