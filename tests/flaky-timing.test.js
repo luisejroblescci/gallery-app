@@ -18,7 +18,7 @@ describe('Flaky Timing-Based Tests', () => {
     document.body.innerHTML = mockHTML;
   });
 
-  // FLAKY TEST 1: Race condition with setTimeout
+  // FIXED TEST 1: Wait for actual completion instead of fixed timing
   test('should load data with proper timing (FLAKY: race condition)', async () => {
     const button = document.getElementById('load-data-btn');
     const display = document.getElementById('data-display');
@@ -39,48 +39,42 @@ describe('Flaky Timing-Based Tests', () => {
 
     spinner.style.display = 'block';
     
-    // Start loading
-    const loadPromise = mockLoadData();
+    // Start loading and wait for completion
+    await mockLoadData();
     
-    // This assertion will fail ~70% of the time due to race condition
-    setTimeout(() => {
-      expect(display.textContent).toBe('Data loaded!');
-      expect(spinner.style.display).toBe('none');
-    }, 120); // Fixed 120ms - will often run before the 80-200ms delay completes
-    
-    await loadPromise;
+    // Assert after actual completion - no race condition
+    expect(display.textContent).toBe('Data loaded!');
+    expect(spinner.style.display).toBe('none');
   });
 
-  // FLAKY TEST 2: Animation timing dependency
-  test('should complete animation within expected time (FLAKY: animation timing)', (done) => {
+  // FIXED TEST 2: Wait for animation completion using Promise
+  test('should complete animation within expected time (FLAKY: animation timing)', async () => {
     const target = document.querySelector('.animation-target');
     let animationStarted = false;
-    let animationCompleted = false;
     
-    // Mock animation with variable duration
+    // Mock animation with variable duration that returns a Promise
     const mockAnimate = () => {
-      animationStarted = true;
-      target.style.transition = 'transform 0.3s ease';
-      target.style.transform = 'translateX(100px)';
-      
-      // Animation completion detection with timing issues - now more variable
-      setTimeout(() => {
-        animationCompleted = true;
-      }, 200 + Math.random() * 200); // 200-400ms - much more inconsistent timing
+      return new Promise((resolve) => {
+        animationStarted = true;
+        target.style.transition = 'transform 0.3s ease';
+        target.style.transform = 'translateX(100px)';
+        
+        // Animation completion detection with timing issues - now more variable
+        setTimeout(() => {
+          resolve();
+        }, 200 + Math.random() * 200); // 200-400ms - much more inconsistent timing
+      });
     };
 
-    mockAnimate();
+    // Wait for animation to actually complete
+    await mockAnimate();
     
-    // Check animation state at fixed time - will fail ~65% due to variable completion time
-    setTimeout(() => {
-      expect(animationStarted).toBe(true);
-      expect(animationCompleted).toBe(true); // FLAKY: will fail ~65% of the time
-      expect(target.style.transform).toBe('translateX(100px)');
-      done();
-    }, 250); // Fixed 250ms check - often before completion
+    // Assert after actual completion - no race condition
+    expect(animationStarted).toBe(true);
+    expect(target.style.transform).toBe('translateX(100px)');
   });
 
-  // FLAKY TEST 3: Async/await with insufficient waiting
+  // FIXED TEST 3: Wait for ALL async operations to complete
   test('should handle multiple async operations (FLAKY: insufficient waiting)', async () => {
     const results = [];
     
@@ -109,52 +103,59 @@ describe('Flaky Timing-Based Tests', () => {
     // Start all operations
     const promises = [asyncOp1(), asyncOp2(), asyncOp3()];
     
-    // Wait for first two only - third will often not complete in time
-    await Promise.all(promises.slice(0, 2));
+    // Wait for ALL operations to complete
+    await Promise.all(promises);
     
-    // Add minimal wait that's insufficient for op3
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    // These assertions will fail ~70% of the time - op3 often not done
+    // Assert after all operations are done - no race condition
     expect(results).toContain('op1');
     expect(results).toContain('op2');
-    expect(results).toContain('op3'); // FLAKY: op3 will often not be done
-    expect(results).toHaveLength(3); // FLAKY: will often only have 2 elements
+    expect(results).toContain('op3');
+    expect(results).toHaveLength(3);
   });
 
-  // FLAKY TEST 4: Event timing with debounce
-  test('should handle debounced events correctly (FLAKY: debounce timing)', (done) => {
+  // FIXED TEST 4: Wait for debounce completion using Promise
+  test('should handle debounced events correctly (FLAKY: debounce timing)', async () => {
     let eventCount = 0;
     let lastEventTime = 0;
     
-    // Mock debounced event handler with longer debounce
+    // Mock debounced event handler that returns Promise
     const mockDebouncedHandler = (() => {
       let timeout;
+      let resolveDebounce;
+      let debouncePromise = Promise.resolve();
+      
       return () => {
         clearTimeout(timeout);
+        debouncePromise = new Promise(resolve => {
+          resolveDebounce = resolve;
+        });
         timeout = setTimeout(() => {
           eventCount++;
           lastEventTime = Date.now();
+          resolveDebounce();
         }, 180); // 180ms debounce - longer delay
+        return debouncePromise;
       };
     })();
 
-    // Trigger multiple events rapidly
+    // Trigger multiple events rapidly and get the final promise
     mockDebouncedHandler();
     setTimeout(() => mockDebouncedHandler(), 50);
     setTimeout(() => mockDebouncedHandler(), 100);
     setTimeout(() => mockDebouncedHandler(), 150);
-    setTimeout(() => mockDebouncedHandler(), 200); // Additional event
+    const finalPromise = await new Promise(resolve => {
+      setTimeout(() => resolve(mockDebouncedHandler()), 200);
+    });
 
-    // Check results too early - debounce will often not have fired yet
-    setTimeout(() => {
-      expect(eventCount).toBe(1); // FLAKY: will be 0 about 70% of the time
-      expect(lastEventTime).toBeGreaterThan(0); // FLAKY: will be 0 about 70% of the time
-      done();
-    }, 200); // Check at 200ms - often before 180ms debounce completes
+    // Wait for debounce to actually complete
+    await finalPromise;
+    
+    // Assert after debounce completion - no race condition
+    expect(eventCount).toBe(1);
+    expect(lastEventTime).toBeGreaterThan(0);
   });
 
-  // FLAKY TEST 5: Promise resolution order
+  // FIXED TEST 5: Test actual completion rather than assuming order
   test('should resolve promises in expected order (FLAKY: promise timing)', async () => {
     const resolveOrder = [];
     
@@ -182,9 +183,10 @@ describe('Flaky Timing-Based Tests', () => {
 
     await Promise.all([promise1, promise2, promise3]);
     
-    // These assertions assume a specific order, but with overlapping ranges, order is very random
-    expect(resolveOrder[0]).toBe('third'); // FLAKY: ~67% chance of being wrong
-    expect(resolveOrder[1]).toBe('first'); // FLAKY: ~67% chance of being wrong  
-    expect(resolveOrder[2]).toBe('second'); // FLAKY: ~67% chance of being wrong
+    // Test that all promises resolved rather than assuming specific order
+    expect(resolveOrder).toContain('first');
+    expect(resolveOrder).toContain('second');
+    expect(resolveOrder).toContain('third');
+    expect(resolveOrder).toHaveLength(3);
   });
 });
