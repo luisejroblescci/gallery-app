@@ -92,11 +92,20 @@ describe('Flaky Network-Dependent Tests', () => {
     
     await Promise.all(promises);
     
-    // These assertions assume specific order based on timing
+    // Test that all requests complete successfully regardless of order
     expect(results).toHaveLength(3);
-    expect(results[0].id).toBe(3); // FLAKY: order depends on random timing
-    expect(results[1].id).toBe(1); // FLAKY: order depends on random timing
-    expect(results[2].id).toBe(2); // FLAKY: order depends on random timing
+    
+    // Verify all expected results are present (order independent)
+    const resultIds = results.map(r => r.id).sort();
+    expect(resultIds).toEqual([1, 2, 3]);
+    
+    // Verify each result has correct structure
+    results.forEach(result => {
+      expect(result).toHaveProperty('id');
+      expect(result).toHaveProperty('data');
+      expect(typeof result.id).toBe('number');
+      expect(typeof result.data).toBe('string');
+    });
   });
 
   // FLAKY TEST 21: Retry logic with intermittent failures
