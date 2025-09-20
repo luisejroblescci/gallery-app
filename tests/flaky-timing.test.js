@@ -154,37 +154,42 @@ describe('Flaky Timing-Based Tests', () => {
     }, 200); // Check at 200ms - often before 180ms debounce completes
   });
 
-  // FLAKY TEST 5: Promise resolution order
+  // FIXED TEST 5: Promise concurrent behavior testing
   test('should resolve promises in expected order (FLAKY: promise timing)', async () => {
     const resolveOrder = [];
     
-    // Create promises with overlapping random delays - more chaos
+    // Use deterministic delays to ensure predictable order
     const promise1 = new Promise(resolve => {
       setTimeout(() => {
         resolveOrder.push('first');
         resolve('first');
-      }, Math.random() * 100 + 50); // 50-150ms
+      }, 100); // Deterministic 100ms
     });
     
     const promise2 = new Promise(resolve => {
       setTimeout(() => {
         resolveOrder.push('second');
         resolve('second');
-      }, Math.random() * 120 + 40); // 40-160ms
+      }, 200); // Deterministic 200ms
     });
     
     const promise3 = new Promise(resolve => {
       setTimeout(() => {
         resolveOrder.push('third');
         resolve('third');
-      }, Math.random() * 80 + 30); // 30-110ms
+      }, 50); // Deterministic 50ms
     });
 
     await Promise.all([promise1, promise2, promise3]);
     
-    // These assertions assume a specific order, but with overlapping ranges, order is very random
-    expect(resolveOrder[0]).toBe('third'); // FLAKY: ~67% chance of being wrong
-    expect(resolveOrder[1]).toBe('first'); // FLAKY: ~67% chance of being wrong  
-    expect(resolveOrder[2]).toBe('second'); // FLAKY: ~67% chance of being wrong
+    // Test the actual concurrent behavior: all promises should resolve
+    expect(resolveOrder).toHaveLength(3);
+    expect(resolveOrder).toContain('first');
+    expect(resolveOrder).toContain('second'); 
+    expect(resolveOrder).toContain('third');
+    // Test the predictable order with deterministic delays
+    expect(resolveOrder[0]).toBe('third'); // 50ms - resolves first
+    expect(resolveOrder[1]).toBe('first'); // 100ms - resolves second
+    expect(resolveOrder[2]).toBe('second'); // 200ms - resolves last
   });
 });
