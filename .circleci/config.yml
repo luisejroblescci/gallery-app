@@ -8,30 +8,60 @@ jobs:
     # Install node dependencies and run tests
     executor: node/default
     environment:
-      JEST_JUNIT_OUTPUT_DIR: ./test-results/
+      JEST_JUNIT_OUTPUT_DIR: ./test-results
+      JEST_JUNIT_OUTPUT_NAME: junit.xml
     steps:
+      - run:
+          name: Configure git to use HTTPS
+          command: |
+            git config --global url."https://github.com/".insteadOf "git@github.com:"
       - checkout
       - node/install-packages:
           pkg-manager: yarn
       - run:
+          name: Ensure test results dir exists
+          command: mkdir -p ./test-results
+      - run:
+          name: Install jest-junit (temporary; prefer adding to package.json devDependencies)
           command: yarn add jest-junit --ignore-workspace-root-check
       - run:
           name: Run tests
           command: yarn run test --ci --runInBand --reporters=default --reporters=jest-junit
       - store_test_results:
           path: ./test-results/
+      - store_artifacts:
+          path: ./test-results/
+          destination: test-results
   deploy:
     # This is an example deploy job, not actually used by the workflow
     docker:
       - image: cimg/base:stable
     steps:
+      - run:
+          name: Plan deployment
+          command: |
+            circleci run release plan "${CIRCLE_JOB}" \
+              --environment-name="${CIRCLE_JOB}" \
+              --component-name="${CIRCLE_PROJECT_REPONAME}" \
+              --target-version="1.0.${CIRCLE_BUILD_NUM}-${CIRCLE_SHA1:0:7}"
       # Replace this with steps to deploy to users
       - run:
           name: deploy
           command: '#e.g. ./deploy.sh'
       - run:
+          name: Update deployment status to running
+          command: circleci run release update "${CIRCLE_JOB}" --status=RUNNING
+      - run:
           name: found github actions config
           command: ':'
+      - run:
+          name: Update deployment status to success
+          command: circleci run release update "${CIRCLE_JOB}" --status=SUCCESS
+          when: on_success
+      - run:
+          name: Update deployment status to failed
+          command: circleci run release update "${CIRCLE_JOB}" --status=FAILED
+          when: on_fail
 workflows:
   build-and-test:
     jobs:
